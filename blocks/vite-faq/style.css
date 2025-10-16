@@ -1,0 +1,126 @@
+.faq-container {
+    width: 100%;
+    background-color: #ffffff;
+    border: 2px solid #e6e9ff;
+    border-radius: 12px;
+    padding: 0 30px 10px 30px;
+    box-sizing: border-box;
+}
+
+.faq-title {
+    margin-bottom: 12px;
+    color: #5650ff;
+    font-weight: bold;
+}
+
+.faq-item {
+    border-top: 1px solid #5650ff;
+    margin-top: 8px;
+}
+
+.faq-question {
+    display: block;
+    cursor: pointer;
+    color: #0d0d0d;
+    position: relative;
+    user-select: none;
+    transition: color 0.3s ease;
+    font-weight: bold;
+}
+
+.faq-question:hover {
+    color: #8FA3FF;
+}
+
+.faq-question::after {
+    content: "+";
+    position: absolute;
+    right: 0;
+    top: 50%;
+    transform: translateY(-50%);
+    transition: all 0.3s ease;
+    color: #5650ff;
+    font-size: 1.2em;
+    width: 20px;
+    height: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.faq-item input[type="checkbox"] {
+    display: none;
+}
+
+.faq-answer {
+    max-height: 0;
+    overflow: hidden;
+    line-height: 1.6;
+    color: #333;
+    transition: max-height 0.4s ease, padding-bottom 0.4s ease;
+    margin-left: 16px;
+}
+
+/* When checkbox is checked - expanded state */
+.faq-item input[type="checkbox"]:checked ~ .faq-answer {
+    max-height: auto;
+}
+
+.faq-item input[type="checkbox"]:checked + label.faq-question::after {
+    content: "−";
+    transform: translateY(-50%) rotate(180deg);
+    color: #8FA3FF;
+}
+
+.faq-question.expanded::after {
+    content: "−";
+    transform: translateY(-50%) rotate(180deg);
+    color: #8FA3FF;
+}
+
+/* Accessibility improvements */
+.faq-question:focus {
+    outline: 2px solid #8FA3FF;
+    outline-offset: 2px;
+}
+
+/* Smooth transitions for dynamic height changes */
+.faq-answer {
+    transition: max-height 0.4s cubic-bezier(0.4, 0, 0.2, 1), 
+                padding-bottom 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* Theme compatibility - prevent theme styles from interfering */
+.faq-container * {
+    box-sizing: border-box;
+}
+
+.faq-question {
+    text-decoration: none !important;
+    border: none !important;
+    background: none !important;
+}
+
+/* High contrast mode support */
+@media (prefers-contrast: high) {
+    .faq-container {
+        border: 2px solid #000;
+    }
+    
+    .faq-item {
+        border-top: 2px solid #000;
+    }
+    
+    .faq-question {
+        color: #000;
+    }
+}
+
+/* Reduced motion support */
+@media (prefers-reduced-motion: reduce) {
+    .faq-question,
+    .faq-question::after,
+    .faq-answer {
+        transition: none;
+    }
+}

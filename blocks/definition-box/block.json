@@ -1,0 +1,30 @@
+{
+  "apiVersion": 3,
+  "name": "viteseo-ttf-child/definition-box",
+  "title": "Definition Box",
+  "description": "A clean callout box for definitions or short explanations.",
+  "category": "text",
+  "icon": "editor-alignleft",
+  "keywords": ["definition", "callout", "info", "box"],
+  "supports": {
+    "html": false,
+    "spacing": { "margin": true, "padding": true },
+    "typography": { "fontSize": true, "lineHeight": true }
+  },
+  "attributes": {
+    "content": {
+      "type": "string",
+      "source": "html",
+      "selector": "p",
+      "default": "<strong>123 Form Builder </strong>is a cloud-based tool that enables users to design, manage, and integrate custom online forms for efficient data collection and automation."
+    }
+  },
+  "style": "file:./style.css",
+  "editorScript": "file:./block.js",
+  "editorStyle": "file:./editor.css",
+  "example": {
+    "attributes": {
+      "content": "<strong>Term:</strong> a short, clear definition."
+    }
+  }
+}

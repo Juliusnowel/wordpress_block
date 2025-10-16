@@ -1,0 +1,44 @@
+{
+  "apiVersion": 3,
+  "name": "viteseo-ttf-child/key-takeaways",
+  "title": "Key Takeaways",
+  "description": "A styled list of key takeaways with a bordered box and checkmarks.",
+  "category": "text",
+  "icon": "list-view",
+  "keywords": ["takeaways", "summary", "highlights", "checklist"],
+  "supports": {
+    "html": false,
+    "spacing": { "margin": true, "padding": true }
+  },
+  "attributes": {
+    "heading": {
+      "type": "string",
+      "source": "html",
+      "selector": "h4",
+      "default": "Key Takeaways"
+    },
+    "items": {
+      "type": "array",
+      "default": [
+        "123 Form Builder is an online platform for building and managing web forms without coding skills.",
+        "It streamlines data collection, automates processes, and integrates with popular apps and website builders.",
+        "Features include drag-and-drop design, conditional logic, payment integration, and real-time analytics.",
+        "It is often confused with simple form plugins but supports advanced workflows and enterprise use.",
+        "Widely used in ecommerce, education, healthcare, and event management for efficient, scalable data handling."
+      ]
+    }
+  },
+  "editorScript": "file:./block.js",
+  "style": "file:./style.css",
+  "editorStyle": "file:./editor.css",
+  "example": {
+    "attributes": {
+      "heading": "Key Takeaways",
+      "items": [
+        "Clear, scannable bullet points.",
+        "Matches your site’s color palette.",
+        "Great for summaries and conclusions."
+      ]
+    }
+  }
+}

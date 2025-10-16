@@ -1,0 +1,41 @@
+{
+  "$schema": "https://schemas.wp.org/trunk/block.json",
+  "apiVersion": 3,
+  "name": "twentytwentyfive-child/vite-faq",
+  "title": "FAQ Block",
+  "category": "widgets",
+  "description": "A block for displaying frequently asked questions with collapsible answers and structured data support.",
+  "keywords": ["faq", "questions", "answers", "accordion", "schema"],
+  "supports": {
+    "html": false,
+    "align": true,
+    "spacing": {
+      "margin": true,
+      "padding": true
+    }
+  },
+  "attributes": {
+    "faqs": {
+      "type": "array",
+      "default": [
+        {
+          "id": 1,
+          "question": "What is this FAQ about?",
+          "answer": "This is a sample FAQ item. You can edit this in the sidebar to customize your questions and answers."
+        }
+      ]
+    },
+    "titleTag": {
+      "type": "string",
+      "default": "h2"
+    },
+    "questionTag": {
+      "type": "string",
+      "default": "h3"
+    }
+  },
+  "style": "file:./style.css",
+  "script": "file:./frontend.js",
+  "editorStyle": "file:./editor.css",
+  "editorScript": "file:./block.js"
+}
