@@ -656,14 +656,14 @@ function wd_definitions_page_shortcode() {
             definition: '정의',
             review: '리뷰',
             news: '뉴스',
-            howto: '사용 가이드'
+            howto: '가이드'
         } : {
             all: 'All',
             digits: '0-9',
             definition: 'Definition',
             review: 'Reviews',
             news: 'News',
-            howto: 'How-tos'
+            howto: 'Guides'
         };
 
         

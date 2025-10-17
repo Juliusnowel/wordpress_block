@@ -58,7 +58,7 @@ function wmg_ui_bundle($cms_key, $lang){
   $ph    = ($lang==='ko') ? "{$cat['ko']} 글 검색…" : "Search {$cat['en']} articles…";
   $labels = ($lang==='ko')
     ? ['all'=>'모든 유형','howto'=>'사용 가이드','news'=>'뉴스','review'=>'리뷰','def'=>'용어집']
-    : ['all'=>'All types','howto'=>'How-tos','news'=>'News','review'=>'Reviews','def'=>'Definitions'];
+    : ['all'=>'All types','howto'=>'Guides','news'=>'News','review'=>'Reviews','def'=>'Definitions'];
   return ['title'=>$title,'ph'=>$ph,'labels'=>$labels,'class'=>$cat['class']];
 }
 
@@ -224,7 +224,7 @@ function wmg_cms_articles_sc($atts){
         </button>
         <div id="wmgDD" class="wmg-dd">
           <button class="wmg-dd-item selected" data-v=""><?php echo esc_html($ui['labels']['all']); ?></button>
-          <button class="wmg-dd-item" data-v="definition"><?php echo esc_html($ui['labels']['def']); ?></button>
+          <!-- <button class="wmg-dd-item" data-v="definition"><?php echo esc_html($ui['labels']['def']); ?></button> -->
           <button class="wmg-dd-item" data-v="review"><?php echo esc_html($ui['labels']['review']); ?></button>
           <button class="wmg-dd-item" data-v="news"><?php echo esc_html($ui['labels']['news']); ?></button>
           <button class="wmg-dd-item" data-v="how-to"><?php echo esc_html($ui['labels']['howto']); ?></button>
