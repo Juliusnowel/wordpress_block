@@ -3,189 +3,276 @@ add_action('wp_ajax_cw_blog_search', 'cw_blog_search_ajax');
 add_action('wp_ajax_nopriv_cw_blog_search', 'cw_blog_search_ajax');
 
 function cw_blog_search_ajax() {
-    // Verify nonce for security
-    if (!wp_verify_nonce($_POST['nonce'], 'cw_blog_search_nonce')) {
-        wp_die('Security check failed');
+    // Security gate
+    if ( ! isset($_POST['nonce']) || ! wp_verify_nonce($_POST['nonce'], 'cw_blog_search_nonce') ) {
+        wp_send_json_error(['message' => 'Security check failed'], 403);
     }
-    
-    $search_query = sanitize_text_field($_POST['search_query']);
-    $category = sanitize_text_field($_POST['category']);
-    $paged = intval($_POST['paged']);
-    $posts_per_page = intval($_POST['posts_per_page']);
-    // Polylang change: Get the language from the AJAX request
-    $lang = isset($_POST['lang']) ? sanitize_text_field($_POST['lang']) : '';
-    
+
+    // Inputs
+    $search_query   = isset($_POST['search_query']) ? sanitize_text_field( wp_unslash($_POST['search_query']) ) : '';
+    $category_slug  = isset($_POST['category']) ? sanitize_text_field( wp_unslash($_POST['category']) ) : '';
+    $paged          = isset($_POST['paged']) ? max(1, (int) $_POST['paged']) : 1;
+    $posts_per_page = isset($_POST['posts_per_page']) ? max(1, (int) $_POST['posts_per_page']) : 9;
+
+    // Language resolution
+    if ( isset($_POST['lang']) ) {
+        $lang = sanitize_key( wp_unslash($_POST['lang']) );
+    } elseif ( function_exists('pll_current_language') ) {
+        $lang = pll_current_language('slug');
+    } else {
+        $lang = '';
+    }
+
+    // Category resolution (always enforce)
+    $translated_term_id = 0;
+    $base_term = $category_slug ? get_term_by('slug', $category_slug, 'category') : null;
+
+    if ( $base_term instanceof WP_Term ) {
+        if ( function_exists('pll_get_term') && $lang ) {
+            $maybe = pll_get_term( $base_term->term_id, $lang );
+            $translated_term_id = $maybe ? (int) $maybe : (int) $base_term->term_id;
+        } else {
+            $translated_term_id = (int) $base_term->term_id;
+        }
+    }
+
+    // Fallback: if still not found, try direct slug lookup in the current language
+    if ( ! $translated_term_id && $category_slug ) {
+        $term_fallback = get_term_by('slug', $category_slug, 'category');
+        if ( $term_fallback instanceof WP_Term ) {
+            $translated_term_id = (int) $term_fallback->term_id;
+        }
+    }
+
+
     // Build query args
     $query_args = array(
-		'post_type'      => array('post', 'review', 'definition', 'how-to', 'news'),
-        'category_name'  => $category,
-        'posts_per_page' => $posts_per_page,
-        'paged'          => $paged,
-        'post_status'    => 'publish',
-        'orderby'        => 'date',
-        'order'          => 'DESC',
+        'post_type'           => array('post', 'review', 'definition', 'how-to', 'news'),
+        'posts_per_page'      => $posts_per_page,
+        'paged'               => $paged,
+        'post_status'         => 'publish',
+        'orderby'             => 'date',
+        'order'               => 'DESC',
+        'ignore_sticky_posts' => true,
+        'lang'                => $lang,
+        'suppress_filters'    => false,
     );
 
-    // Polylang change: Add lang parameter if it exists
-    if (!empty($lang)) {
-        $query_args['lang'] = $lang;
+    // Mandatory category scoping:
+    // 1) Prefer translated term_id
+    // 2) Fallback to slug
+    // 3) If neither available, force empty result set
+    if ( $translated_term_id ) {
+        $query_args['tax_query'] = array(
+            array(
+                'taxonomy'         => 'category',
+                'field'            => 'term_id',
+                'terms'            => array($translated_term_id),
+                'include_children' => false,
+            ),
+        );
+    } elseif ( $category_slug ) {
+        $query_args['tax_query'] = array(
+            array(
+                'taxonomy'         => 'category',
+                'field'            => 'slug',
+                'terms'            => array($category_slug),
+                'include_children' => false,
+            ),
+        );
+    } else {
+        // No valid category context → return nothing
+        $query_args['post__in'] = array(0);
     }
-    
-    // Add search if provided
-    if (!empty($search_query)) {
+
+    if ( $search_query !== '' ) {
         $query_args['s'] = $search_query;
     }
-    
+
+    // Execute
     $query = new WP_Query($query_args);
-    
     ob_start();
-    
-    if ($query->have_posts()) : ?>
+
+    if ( $query->have_posts() ) : ?>
         <div class="cw-blog-grid">
-            <?php while ($query->have_posts()) : $query->the_post(); ?>
+            <?php while ( $query->have_posts() ) : $query->the_post(); ?>
                 <article class="cw-blog-item">
-					<a class="cw-blog-link" href="<?php the_permalink(); ?>" target="_blank" rel="noopener noreferrer">
-						<div class="cw-blog-image">
-							<?php if (has_post_thumbnail()) : ?>
-								<img 
-									src="<?php echo esc_url(get_the_post_thumbnail_url(get_the_ID(), 'medium_large')); ?>" 
-									alt="<?php echo esc_attr(get_the_title()); ?>"
-									loading="lazy"
-									onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-								>
-								<div class="placeholder-icon" style="display: none;">📄</div>
-							<?php else : ?>
-								<div class="placeholder-icon">📄</div>
-							<?php endif; ?>
-						</div>
-						<div class="cw-blog-content">
-							<h2 class="cw-blog-title">
-								<?php the_title(); ?>
-							</h2>
-							<div class="cw-blog-excerpt"><?php echo wp_trim_words( get_the_excerpt(), 30, '…' ); ?></div>
-						</div>
-					</a>
+                    <a class="cw-blog-link" href="<?php the_permalink(); ?>" target="_blank" rel="noopener noreferrer">
+                        <div class="cw-blog-image">
+                            <?php if ( has_post_thumbnail() ) : ?>
+                                <img
+                                    src="<?php echo esc_url( get_the_post_thumbnail_url( get_the_ID(), 'medium_large' ) ); ?>"
+                                    alt="<?php echo esc_attr( get_the_title() ); ?>"
+                                    loading="lazy"
+                                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                <div class="placeholder-icon" style="display:none;">📄</div>
+                            <?php else : ?>
+                                <div class="placeholder-icon">📄</div>
+                            <?php endif; ?>
+                        </div>
+                        <div class="cw-blog-content">
+                            <h2 class="cw-blog-title"><?php the_title(); ?></h2>
+                            <div class="cw-blog-excerpt"><?php echo wp_kses_post( wp_trim_words( get_the_excerpt(), 30, '…' ) ); ?></div>
+                        </div>
+                    </a>
                 </article>
             <?php endwhile; ?>
         </div>
-        
-        <?php if ($query->max_num_pages > 1) : ?>
-            <nav class="cw-pagination" data-max-pages="<?php echo $query->max_num_pages; ?>">
+
+        <?php if ( $query->max_num_pages > 1 ) : ?>
+            <nav class="cw-pagination" data-max-pages="<?php echo (int) $query->max_num_pages; ?>">
                 <?php
-                echo paginate_links(array(
+                echo paginate_links( array(
                     'base'      => '#',
                     'format'    => '',
                     'current'   => $paged,
                     'total'     => $query->max_num_pages,
-                    'prev_text' => __('Prev', 'twentytwentyfive'),
-                    'next_text' => __('Next', 'twentytwentyfive'),
+                    'prev_text' => esc_html__( 'Prev', 'twentytwentyfive' ),
+                    'next_text' => esc_html__( 'Next', 'twentytwentyfive' ),
                     'type'      => 'list',
-                ));
+                ) );
                 ?>
             </nav>
         <?php endif; ?>
     <?php else : ?>
         <div class="cw-no-posts">
-            <?php if (!empty($search_query)) : ?>
-                <?php 
-                printf(
-                    esc_html__('No posts found for "%s".', 'twentytwentyfive'),
-                    '<strong>' . esc_html($search_query) . '</strong>'
-                ); 
-                ?>
-                <br><br>
-                <a href="#" class="cw-clear-search" style="color: #667eea; text-decoration: none;" target="_blank" rel="noopener noreferrer">
-                    <?php esc_html_e('← View all posts', 'twentytwentyfive'); ?>
-                </a>
-            <?php else : ?>
-                <?php esc_html_e('No posts found.', 'twentytwentyfive'); ?>
-            <?php endif; ?>
+            <?php esc_html_e('No posts found.', 'twentytwentyfive'); ?>
         </div>
     <?php endif;
-    
+
     wp_reset_postdata();
-    
+
     $response = array(
-        'html' => ob_get_clean(),
-        'found_posts' => $query->found_posts,
-        'max_pages' => $query->max_num_pages,
-        'current_page' => $paged
+        'html'          => ob_get_clean(),
+        'found_posts'   => (int) $query->found_posts,
+        'max_pages'     => (int) $query->max_num_pages,
+        'current_page'  => (int) $paged,
     );
-    
+
     wp_send_json_success($response);
 }
 
 // 2) Updated shortcode function (with Polylang support)
 function cw_blog_gatherer_func($atts) {
-    // Get the current URL path and extract category
-    $current_url = $_SERVER['REQUEST_URI'];
-    $url_parts = explode('/', trim($current_url, '/'));
-    
-    // Determine category based on URL
-    $category = '';
-    $category_display = '';
-    $category_class = '';
-    
-    if (in_array('content-writing', $url_parts)) {
-        $category = 'content-writing';
-        $category_display = 'Content Writing';
-        $category_class = 'cw-category-content-writing';
-    } elseif (in_array('web-hosting', $url_parts)) {
-        $category = 'web-hosting';
-        $category_display = 'Web Hosting';
-        $category_class = 'cw-category-web-hosting';
+    $current_url = isset($_SERVER['REQUEST_URI']) ? $_SERVER['REQUEST_URI'] : '';
+    $url_parts   = explode('/', trim($current_url, '/'));
+
+    // Detect language first
+    $lang = function_exists('pll_current_language') ? pll_current_language('slug') : '';
+
+    // Route to category by URL with language awareness
+    if ($lang === 'ko') {
+        if (in_array('web-hosting', $url_parts, true) || in_array('웹-호스팅', $url_parts, true)) {
+            $category_slug   = '웹-호스팅';
+            $category_name   = '웹 호스팅';
+            $category_class  = 'cw-category-web-hosting';
+        } else {
+            $category_slug   = '콘텐츠-작성';
+            $category_name   = '콘텐츠 작성';
+            $category_class  = 'cw-category-content-writing';
+        }
     } else {
-        $category = 'content-writing';
-        $category_display = 'Content Writing';
-        $category_class = 'cw-category-content-writing';
+        if (in_array('web-hosting', $url_parts, true)) {
+            $category_slug   = 'web-hosting';
+            $category_name   = 'Web Hosting';
+            $category_class  = 'cw-category-web-hosting';
+        } else {
+            $category_slug   = 'content-writing';
+            $category_name   = 'Content Writing';
+            $category_class  = 'cw-category-content-writing';
+        }
     }
-    
-    // Allow override via shortcode attributes
-    $atts = shortcode_atts(array(
-        'category' => $category,
-        'display_name' => $category_display,
-        'posts_per_page' => 9,
-    ), $atts);
-    
-    // Initial load - get first page
-    $query_args = array(
-		'post_type'      => array('post', 'review', 'definition', 'how-to', 'news'),
-        'category_name'  => $atts['category'],
-        'posts_per_page' => intval($atts['posts_per_page']),
-        'paged'          => 1,
-        'post_status'    => 'publish',
-        'orderby'        => 'date',
-        'order'          => 'DESC',
-        'lang'           => pll_current_language(),
+
+
+    // Shortcode defaults
+    $atts = shortcode_atts(
+        array(
+            'category'       => $category_slug, // slug
+            'display_name'   => $category_name,
+            'posts_per_page' => 9,
+        ),
+        $atts
     );
-    
+
+    // Language
+    $lang = function_exists('pll_current_language') ? pll_current_language('slug') : '';
+
+    // Category resolution (always enforce)
+    $translated_term_id = 0;
+    $base_term = get_term_by('slug', $atts['category'], 'category');
+
+    if ($base_term instanceof WP_Term) {
+        if (function_exists('pll_get_term') && !empty($lang)) {
+            $maybe = pll_get_term($base_term->term_id, $lang);
+            $translated_term_id = $maybe ? (int) $maybe : (int) $base_term->term_id;
+        } else {
+            $translated_term_id = (int) $base_term->term_id;
+        }
+    }
+
+    // Build query
+    $query_args = array(
+        'post_type'           => array('post', 'review', 'definition', 'how-to', 'news'),
+        'posts_per_page'      => (int) $atts['posts_per_page'],
+        'paged'               => 1,
+        'post_status'         => 'publish',
+        'orderby'             => 'date',
+        'order'               => 'DESC',
+        'ignore_sticky_posts' => true,
+        'lang'                => $lang,
+        'suppress_filters'    => false,
+    );
+
+    // Mandatory category scoping with fallback/guard
+    if ($translated_term_id) {
+        $query_args['tax_query'] = array(
+            array(
+                'taxonomy'         => 'category',
+                'field'            => 'term_id',
+                'terms'            => array($translated_term_id),
+                'include_children' => false,
+            ),
+        );
+    } elseif (!empty($atts['category'])) {
+        $query_args['tax_query'] = array(
+            array(
+                'taxonomy'         => 'category',
+                'field'            => 'slug',
+                'terms'            => array($atts['category']),
+                'include_children' => false,
+            ),
+        );
+    } else {
+        $query_args['post__in'] = array(0);
+    }
+
     $query = new WP_Query($query_args);
-    
+
     ob_start();
     ?>
-    <div class="cw-blog-container" 
+    <div class="cw-blog-container"
          data-category="<?php echo esc_attr($atts['category']); ?>"
          data-display-name="<?php echo esc_attr($atts['display_name']); ?>"
-         data-posts-per-page="<?php echo esc_attr($atts['posts_per_page']); ?>"
-         data-nonce="<?php echo wp_create_nonce('cw_blog_search_nonce'); ?>"
-         data-ajax-url="<?php echo admin_url('admin-ajax.php'); ?>"
-         data-lang="<?php echo esc_attr(pll_current_language()); ?>">
-        
+         data-posts-per-page="<?php echo esc_attr((int) $atts['posts_per_page']); ?>"
+         data-nonce="<?php echo esc_attr( wp_create_nonce('cw_blog_search_nonce') ); ?>"
+         data-ajax-url="<?php echo esc_url( admin_url('admin-ajax.php') ); ?>"
+         data-lang="<?php echo esc_attr($lang); ?>">
+
         <div class="cw-hero-section <?php echo esc_attr($category_class); ?>">
             <div class="cw-hero-background" data-parallax></div>
             <div class="cw-hero-overlay"></div>
             <div class="cw-blog-header">
                 <h1>
-                    <?php esc_html_e('Articles for', 'twentytwentyfive'); ?> 
+                    <?php esc_html_e('Articles for', 'twentytwentyfive'); ?>
                     <span class="subtitle"><?php echo esc_html($atts['display_name']); ?></span>
                 </h1>
                 <div class="cw-search-container">
                     <form class="cw-search-form">
-                        <input 
-                            type="text" 
-                            name="cw_search" 
-                            class="cw-search-input" 
-                            placeholder="<?php echo esc_attr(sprintf(__('Search %s articles...', 'twentytwentyfive'), strtolower($atts['display_name']))); ?>" 
+                        <input
+                            type="text"
+                            name="cw_search"
+                            class="cw-search-input"
+                            placeholder="<?php echo esc_attr( sprintf( __('Search %s articles...', 'twentytwentyfive'), strtolower($atts['display_name']) ) ); ?>"
                             autocomplete="off"
                         >
                         <div class="cw-search-loading" style="display: none;">
@@ -195,49 +282,48 @@ function cw_blog_gatherer_func($atts) {
                 </div>
             </div>
         </div>
-        
+
         <div class="cw-results-container">
             <?php if ($query->have_posts()) : ?>
                 <div class="cw-blog-grid">
                     <?php while ($query->have_posts()) : $query->the_post(); ?>
                         <article class="cw-blog-item">
-							<a class="cw-blog-link" href="<?php the_permalink(); ?>" target="_blank" rel="noopener noreferrer">
-								<div class="cw-blog-image">
-									<?php if (has_post_thumbnail()) : ?>
-										<img 
-											src="<?php echo esc_url(get_the_post_thumbnail_url(get_the_ID(), 'medium_large')); ?>" 
-											alt="<?php echo esc_attr(get_the_title()); ?>"
-											loading="lazy"
-											onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';"
-										>
-										<div class="placeholder-icon" style="display: none;">📄</div>
-									<?php else : ?>
-										<div class="placeholder-icon">📄</div>
-									<?php endif; ?>
-								</div>
-								<div class="cw-blog-content">
-									<h2 class="cw-blog-title">
-										<?php the_title(); ?>
-									</h2>
-									<div class="cw-blog-excerpt"><?php echo wp_trim_words( get_the_excerpt(), 30, '…' ); ?></div>
-								</div>
-							</a>
+                            <a class="cw-blog-link" href="<?php the_permalink(); ?>" target="_blank" rel="noopener noreferrer">
+                                <div class="cw-blog-image">
+                                    <?php if (has_post_thumbnail()) : ?>
+                                        <img
+                                            src="<?php echo esc_url( get_the_post_thumbnail_url(get_the_ID(), 'medium_large') ); ?>"
+                                            alt="<?php echo esc_attr( get_the_title() ); ?>"
+                                            loading="lazy"
+                                            onerror="this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                                        <div class="placeholder-icon" style="display: none;">📄</div>
+                                    <?php else : ?>
+                                        <div class="placeholder-icon">📄</div>
+                                    <?php endif; ?>
+                                </div>
+                                <div class="cw-blog-content">
+                                    <h2 class="cw-blog-title"><?php the_title(); ?></h2>
+                                    <div class="cw-blog-excerpt">
+                                        <?php echo wp_kses_post( wp_trim_words( get_the_excerpt(), 30, '…' ) ); ?>
+                                    </div>
+                                </div>
+                            </a>
                         </article>
                     <?php endwhile; ?>
                 </div>
-                
+
                 <?php if ($query->max_num_pages > 1) : ?>
-                    <nav class="cw-pagination" data-max-pages="<?php echo $query->max_num_pages; ?>">
+                    <nav class="cw-pagination" data-max-pages="<?php echo (int) $query->max_num_pages; ?>">
                         <?php
-                        echo paginate_links(array(
+                        echo paginate_links( array(
                             'base'      => '#',
                             'format'    => '',
                             'current'   => 1,
                             'total'     => $query->max_num_pages,
-                            'prev_text' => __('Prev', 'twentytwentyfive'),
-                            'next_text' => __('Next', 'twentytwentyfive'),
+                            'prev_text' => esc_html__( 'Prev', 'twentytwentyfive' ),
+                            'next_text' => esc_html__( 'Next', 'twentytwentyfive' ),
                             'type'      => 'list',
-                        ));
+                        ) );
                         ?>
                     </nav>
                 <?php endif; ?>
@@ -253,6 +339,7 @@ function cw_blog_gatherer_func($atts) {
     return ob_get_clean();
 }
 add_shortcode('dynamic_blog_gatherer', 'cw_blog_gatherer_func');
+
 
 // 3) CSS (No changes made here)
 add_action('wp_enqueue_scripts', 'cw_blog_gatherer_inline_styles');
